@@ -1,15 +1,29 @@
 import os
-import csv
-from typing import Dict, Any
+import glob
+from typing import Dict, Any, List
 from models.audit_schema import ClientAuditRecord, AuditSection
 
-# Import actual functions from your pings/ directory
+# Live Network Pings
 from pings.security_ping import audit_security
 from pings.ai_readiness_ping import check_ai_readiness
 from pings.pagespeed_ping import audit_pagespeed
 from pings.onpage_ping import audit_onpage
 from pings.gdpr_cookie_ping import audit_gdpr_cookies
-from engine.scorer import score_technical_seo
+
+# OOP CSV Parsers (Phase 1 Vendors)
+from parsers.screaming_frog_parser import ScreamingFrogParser
+from parsers.semrush_parser import SemrushParser
+from parsers.spyfu_parser import SpyFuParser
+from parsers.brightlocal_parser import BrightLocalParser
+from parsers.waikay_parser import WaikayParser
+
+# Scoring Engine
+from engine.scorer import (
+    score_technical_seo,
+    score_organic_search,
+    score_ppc_ads,
+    score_local_seo,
+)
 
 
 def run_live_pings(domain: str) -> Dict[str, AuditSection]:
@@ -85,88 +99,164 @@ def run_live_pings(domain: str) -> Dict[str, AuditSection]:
     return results
 
 
-def parse_csv_files(csv_dir: str) -> Dict[str, Any]:
-    """Scans input_csvs/ directory and extracts crawl/analytics metrics."""
-    parsed_data = {
-        "technical_seo": {"status_404": 0, "non_indexable": 0, "total_urls": 0},
-        "analytics": {"engagement_rate": None, "bounce_rate": None}
+def parse_vendor_csvs(csv_dir: str) -> Dict[str, Any]:
+    """
+    Scans csv_dir using Phase 1 vendor parser classes:
+    - ScreamingFrogParser
+    - SemrushParser
+    - SpyFuParser
+    - BrightLocalParser
+    - WaikayParser
+    """
+    parsed_results = {
+        "screaming_frog": None,
+        "semrush": None,
+        "spyfu": None,
+        "brightlocal": None,
+        "waikay": None,
     }
 
     if not os.path.exists(csv_dir):
-        return parsed_data
+        return parsed_results
 
-    for fname in os.listdir(csv_dir):
-        if not fname.endswith(".csv"):
-            continue
-        filepath = os.path.join(csv_dir, fname)
-        try:
-            with open(filepath, "r", encoding="utf-8-sig") as f:
-                reader = csv.reader(f)
-                header_row = next(reader, None)
-                if not header_row:
-                    continue
-                headers = [h.strip().lower() for h in header_row]
+    csv_files = glob.glob(os.path.join(csv_dir, "*.csv"))
 
-                # Screaming Frog / Technical Crawl CSV
-                if "address" in headers and ("status code" in headers or "indexability" in headers):
-                    f.seek(0)
-                    dict_reader = csv.DictReader(f)
-                    total = 0
-                    errors = 0
-                    non_index = 0
-                    for row in dict_reader:
-                        total += 1
-                        code = str(row.get("Status Code", "")).strip()
-                        indexability = str(row.get("Indexability", "")).strip()
-                        if code in ["404", "500", "502", "503"]:
-                            errors += 1
-                        if indexability.lower() == "non-indexable":
-                            non_index += 1
+    parser_classes = [
+        ("screaming_frog", ScreamingFrogParser),
+        ("semrush", SemrushParser),
+        ("spyfu", SpyFuParser),
+        ("brightlocal", BrightLocalParser),
+        ("waikay", WaikayParser),
+    ]
 
-                    parsed_data["technical_seo"] = {
-                        "status_404": errors,
-                        "non_indexable": non_index,
-                        "total_urls": total
-                    }
-        except Exception as e:
-            print(f"   ⚠️ Warning parsing {fname}: {e}")
+    for filepath in csv_files:
+        for key, ParserCls in parser_classes:
+            if parsed_results[key] is not None:
+                continue  # Already parsed a valid file for this vendor
 
-    return parsed_data
+            try:
+                parser_inst = ParserCls(filepath)
+                res = parser_inst.parse()
+                # If parsing succeeded and brought back meaningful metrics
+                if res.get("status") == "success":
+                    parsed_results[key] = res
+            except Exception as e:
+                print(f"Error executing {ParserCls.__name__} on {filepath}: {e}")
+
+    return parsed_results
 
 
 def run_full_client_audit(domain: str, csv_dir: str = "input_csvs") -> ClientAuditRecord:
-    """Executes network pings and incorporates CSV input data into ClientAuditRecord."""
+    """Executes network pings and incorporates Phase 1 vendor CSV exports."""
     # 1. Fetch Live Automated Pings
     live_results = run_live_pings(domain)
 
-    # 2. Parse Dropzone CSV Exports
-    csv_data = parse_csv_files(csv_dir)
+    # 2. Parse Vendor CSV Exports
+    csv_data = parse_vendor_csvs(csv_dir)
 
-    # 3. Process Section 6: Technical SEO from CSV
-    tech_info = csv_data["technical_seo"]
-    if tech_info["total_urls"] > 0:
-        total = tech_info["total_urls"]
-        errors = tech_info["status_404"]
-        score = score_technical_seo(total, errors, tech_info['non_indexable'])
-        findings = [
-            f"Total Crawled URLs: {total}",
-            f"Broken Links / Errors (4xx/5xx): {errors}",
-            f"Non-Indexable Pages: {tech_info['non_indexable']}"
-        ]
+    # --- Technical SEO (Screaming Frog) ---
+    sf_data = csv_data.get("screaming_frog")
+    if sf_data and sf_data.get("status") == "success":
+        m = sf_data.get("metrics", {})
+        total_issues = m.get("total_issues", 0)
+        errors = m.get("broken_links_404", 0) + m.get("high_priority_errors", 0)
+        non_idx = m.get("non_indexable_url_count", 0)
+
+        score = score_technical_seo(total_issues, errors, non_idx)
         sec_technical = AuditSection(
             score=score,
             status="success",
-            findings=findings,
-            raw_data=tech_info
+            findings=[
+                f"Total Issues Flagged: {total_issues}",
+                f"High-Priority Errors / 404s: {errors}",
+                f"Missing Page Titles: {m.get('missing_titles', 0)}",
+                f"Missing H1 Headers: {m.get('missing_h1s', 0)}",
+                f"Non-Indexable URLs: {non_idx}",
+            ],
+            raw_data=sf_data
         )
     else:
         sec_technical = AuditSection(
             score=None,
             status="pending",
-            findings=["No Screaming Frog or crawl CSV uploaded to input_csvs/"]
+            findings=["No Screaming Frog CSV found in input_csvs/"]
         )
 
-    # Construct Complete Record adhering to audit_schema.py
+    # --- Organic Search & Strategy (SEMrush) ---
+    semrush_data = csv_data.get("semrush")
+    if semrush_data and semrush_data.get("status") == "success":
+        m = semrush_data.get("metrics", {})
+        total_kw = m.get("total_keywords", 0)
+        p2_opps = m.get("page_2_opportunities", 0)
+        score = score_organic_search(total_kw, p2_opps)
+        sec_content = AuditSection(
+            score=score,
+            status="success",
+            findings=[
+                f"Total Keywords Tracked: {total_kw:,}",
+                f"Page 2 Opportunity Keywords (Positions 11-20): {p2_opps}",
+                f"Top Keywords: {', '.join(m.get('top_keywords', [])[:3])}",
+                f"Competitors Identified: {len(m.get('competitors', []))}"
+            ],
+            raw_data=semrush_data
+        )
+    else:
+        sec_content = AuditSection(
+            score=None,
+            status="pending",
+            findings=["No SEMrush CSV found in input_csvs/"]
+        )
+
+    # --- PPC & Paid Search (SpyFu) ---
+    spyfu_data = csv_data.get("spyfu")
+    if spyfu_data and spyfu_data.get("status") == "success":
+        m = spyfu_data.get("metrics", {})
+        paid_kw = m.get("paid_keywords", 0)
+        spend = m.get("est_monthly_spend", 0.0)
+        score = score_ppc_ads(paid_kw, spend)
+        sec_analytics = AuditSection(
+            score=score,
+            status="success",
+            findings=[
+                f"Paid Keywords Tracked: {paid_kw:,}",
+                f"Estimated Monthly Spend: ${spend:,.2f}",
+                f"Top Paid Competitors: {', '.join(m.get('top_paid_competitors', [])[:3])}"
+            ],
+            raw_data=spyfu_data
+        )
+    else:
+        sec_analytics = AuditSection(
+            score=None,
+            status="pending",
+            findings=["No SpyFu PPC CSV found in input_csvs/"]
+        )
+
+    # --- Local SEO & Citations (BrightLocal) ---
+    bl_data = csv_data.get("brightlocal")
+    if bl_data and bl_data.get("status") == "success":
+        m = bl_data.get("metrics", {})
+        rating = m.get("avg_rating", 0.0) or 0.0
+        reviews = m.get("total_reviews", 0)
+        citations = m.get("total_citations", 0)
+        score = score_local_seo(rating, reviews)
+        sec_cro = AuditSection(
+            score=score,
+            status="success",
+            findings=[
+                f"Average Rating: {rating:.1f} / 5.0",
+                f"Total Reviews: {reviews:,}",
+                f"Citations Tracked: {citations}"
+            ],
+            raw_data=bl_data
+        )
+    else:
+        sec_cro = AuditSection(
+            score=None,
+            status="pending",
+            findings=["No BrightLocal CSV found in input_csvs/"]
+        )
+
+    # Combine into schema record
     record = ClientAuditRecord(
         client_domain=domain,
         security=live_results.get("security", AuditSection()),
@@ -175,9 +265,9 @@ def run_full_client_audit(domain: str, csv_dir: str = "input_csvs") -> ClientAud
         onpage_seo=live_results.get("onpage_seo", AuditSection()),
         gdpr_cookies=live_results.get("gdpr_cookies", AuditSection()),
         technical_seo=sec_technical,
-        analytics_tracking=AuditSection(status="pending", findings=["No Analytics CSV found"]),
-        content_strategy=AuditSection(status="pending", findings=["No Content CSV found"]),
-        cro_ux=AuditSection(status="pending", findings=["No CRO CSV found"])
+        analytics_tracking=sec_analytics,
+        content_strategy=sec_content,
+        cro_ux=sec_cro
     )
 
     record.calculate_overall_score()
