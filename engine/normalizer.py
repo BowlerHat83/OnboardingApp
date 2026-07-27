@@ -137,7 +137,6 @@ def parse_vendor_csvs(csv_dir: str) -> Dict[str, Any]:
             try:
                 parser_inst = ParserCls(filepath)
                 res = parser_inst.parse()
-                # If parsing succeeded and brought back meaningful metrics
                 if res.get("status") == "success":
                     parsed_results[key] = res
             except Exception as e:
@@ -211,8 +210,11 @@ def run_full_client_audit(domain: str, csv_dir: str = "input_csvs") -> ClientAud
     spyfu_data = csv_data.get("spyfu")
     if spyfu_data and spyfu_data.get("status") == "success":
         m = spyfu_data.get("metrics", {})
-        paid_kw = m.get("paid_keywords", 0)
+        paid_kw = m.get("total_paid_keywords", 0)
         spend = m.get("est_monthly_spend", 0.0)
+        avg_cpc = m.get("avg_cpc", 0.0)
+        competitors = m.get("top_ppc_competitors", [])
+
         score = score_ppc_ads(paid_kw, spend)
         sec_analytics = AuditSection(
             score=score,
@@ -220,7 +222,8 @@ def run_full_client_audit(domain: str, csv_dir: str = "input_csvs") -> ClientAud
             findings=[
                 f"Paid Keywords Tracked: {paid_kw:,}",
                 f"Estimated Monthly Spend: ${spend:,.2f}",
-                f"Top Paid Competitors: {', '.join(m.get('top_paid_competitors', [])[:3])}"
+                f"Average CPC: ${avg_cpc:.2f}",
+                f"Top PPC Competitors: {', '.join(competitors[:3]) if competitors else 'None identified'}"
             ],
             raw_data=spyfu_data
         )
@@ -235,17 +238,18 @@ def run_full_client_audit(domain: str, csv_dir: str = "input_csvs") -> ClientAud
     bl_data = csv_data.get("brightlocal")
     if bl_data and bl_data.get("status") == "success":
         m = bl_data.get("metrics", {})
-        rating = m.get("avg_rating", 0.0) or 0.0
-        reviews = m.get("total_reviews", 0)
+        gbp_score = m.get("gbp_health_score", 0)
+        map_rank = m.get("avg_map_pack_rank", "N/A")
         citations = m.get("total_citations", 0)
-        score = score_local_seo(rating, reviews)
+
+        score = score_local_seo(gbp_score, citations)
         sec_cro = AuditSection(
             score=score,
             status="success",
             findings=[
-                f"Average Rating: {rating:.1f} / 5.0",
-                f"Total Reviews: {reviews:,}",
-                f"Citations Tracked: {citations}"
+                f"GBP Health Score: {gbp_score} / 100",
+                f"Average Map Pack Rank: {map_rank}",
+                f"Total Citations Tracked: {citations}"
             ],
             raw_data=bl_data
         )
