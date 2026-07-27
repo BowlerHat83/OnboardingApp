@@ -2,85 +2,97 @@ from urllib.parse import urlparse
 import requests
 
 
-def audit_ai_readiness(url: str, timeout: int = 5) -> dict:
-    """Checks for machine-readable files (llms.txt) and AI crawler directives in robots.txt.
+def check_ai_readiness(url: str, timeout: int = 5) -> dict:
+    """Checks for the presence of /llms.txt and inspects robots.txt for AI crawler permissions.
 
-    Returns a standardized dictionary for Service Area #2 (AI Visibility /
-    GEO).
+    Returns data for Service Area #2 (AI Visibility & GEO).
     """
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
 
     parsed = urlparse(url)
     domain = parsed.netloc or parsed.path
+    base_url = f"{parsed.scheme}://{domain}"
 
     result = {
         "domain": domain,
-        "llms_txt": {"present": False, "url": f"https://{domain}/llms.txt"},
-        "ai_crawlers": {
-            "gptbot_allowed": True,
-            "claudebot_allowed": True,
-            "perplexitybot_allowed": True,
-        },
-        "score": 0,
+        "has_llms_txt": False,
+        "has_robots_txt": False,
+        "ai_crawlers_allowed": True,
+        "blocked_ai_bots": [],
+        "ai_score": 50,
+        "status": "error",
     }
 
-    # 1. Check for /llms.txt
+    ai_bots = [
+        "GPTBot",
+        "ChatGPT-User",
+        "ClaudeBot",
+        "PerplexityBot",
+        "Google-Extended",
+    ]
+
     try:
-        res = requests.get(
-            result["llms_txt"]["url"],
-            timeout=timeout,
-            headers={"User-Agent": "BowlerHatAuditBot/1.0"},
-        )
-        result["llms_txt"]["present"] = res.status_code == 200
-    except Exception:
-        result["llms_txt"]["present"] = False
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) BowlerHatAuditBot/1.0"
+        }
 
-    # 2. Inspect robots.txt for AI Bot blocks
-    try:
-        robots_url = f"https://{domain}/robots.txt"
-        res = requests.get(
-            robots_url,
-            timeout=timeout,
-            headers={"User-Agent": "BowlerHatAuditBot/1.0"},
-        )
-
-        if res.status_code == 200:
-            content = res.text.lower()
-
-            # Check if specific bots are disallowed
-            if "user-agent: gptbot" in content and "disallow: /" in content:
-                result["ai_crawlers"]["gptbot_allowed"] = False
-            if "user-agent: claudebot" in content and "disallow: /" in content:
-                result["ai_crawlers"]["claudebot_allowed"] = False
+        # 1. Check for /llms.txt
+        try:
+            llms_res = requests.get(
+                f"{base_url}/llms.txt", timeout=timeout, headers=headers
+            )
             if (
-                "user-agent: perplexitybot" in content
-                and "disallow: /" in content
+                llms_res.status_code == 200
+                and "text/plain" in llms_res.headers.get("Content-Type", "")
             ):
-                result["ai_crawlers"]["perplexitybot_allowed"] = False
-    except Exception:
-        pass  # Default to allowed if robots.txt can't be fetched
+                result["has_llms_txt"] = True
+        except Exception:
+            pass
 
-    # Calculate AI File Readiness Score (0-100)
-    score = 40  # Base score for active domain
-    if result["llms_txt"]["present"]:
-        score += 30
-    if result["ai_crawlers"]["gptbot_allowed"]:
-        score += 10
-    if result["ai_crawlers"]["claudebot_allowed"]:
-        score += 10
-    if result["ai_crawlers"]["perplexitybot_allowed"]:
-        score += 10
+        # 2. Check /robots.txt for AI Bot restrictions
+        try:
+            robots_res = requests.get(
+                f"{base_url}/robots.txt", timeout=timeout, headers=headers
+            )
+            if robots_res.status_code == 200:
+                result["has_robots_txt"] = True
+                content = robots_res.text.lower()
 
-    result["score"] = score
+                for bot in ai_bots:
+                    if f"user-agent: {bot.lower()}" in content:
+                        # Simple check if Disallow follows
+                        lines = content.splitlines()
+                        for i, line in enumerate(lines):
+                            if line.strip() == f"user-agent: {bot.lower()}":
+                                if (
+                                    i + 1 < len(lines)
+                                    and "disallow: /" in lines[i + 1].strip()
+                                ):
+                                    result["blocked_ai_bots"].append(bot)
+
+                if result["blocked_ai_bots"]:
+                    result["ai_crawlers_allowed"] = False
+        except Exception:
+            pass
+
+        # Score calculation
+        score = 50
+        if result["has_llms_txt"]:
+            score += 30
+        if result["has_robots_txt"] and result["ai_crawlers_allowed"]:
+            score += 20
+        elif not result["ai_crawlers_allowed"]:
+            score -= 20
+
+        result["ai_score"] = max(0, min(100, score))
+        result["status"] = "success"
+
+    except Exception as e:
+        result["error"] = f"AI Readiness Scan Error: {str(e)}"
+
     return result
 
 
-# Standalone Test Execution
 if __name__ == "__main__":
-    import json
-
-    test_domain = "github.com"
-    print(f"--- Running AI Readiness Ping for {test_domain} ---")
-    data = audit_ai_readiness(test_domain)
-    print(json.dumps(data, indent=2))
+    print("--- AI Readiness Ping Loaded ---")

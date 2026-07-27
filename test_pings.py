@@ -18,11 +18,15 @@ def run_all_pings(target_domain):
         "2. AI Readiness": lambda: audit_ai_readiness(target_domain),
         "3. Website Health": lambda: audit_pagespeed(target_domain),
         "4. On-Page SEO & UX": lambda: audit_onpage(target_domain),
-        "5. GDPR & Cookie Compliance": lambda: audit_gdpr_cookies(target_domain),
+        "5. GDPR & Cookie Compliance": lambda: audit_gdpr_cookies(
+            target_domain
+        ),
     }
     results = {}
     with ThreadPoolExecutor(max_workers=5) as executor:
-        future_to_name = {executor.submit(task): name for name, task in tasks.items()}
+        future_to_name = {
+            executor.submit(task): name for name, task in tasks.items()
+        }
         for future in future_to_name:
             name = future_to_name[future]
             try:
