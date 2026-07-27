@@ -4,7 +4,7 @@ from parsers.base_parser import BaseCSVParser
 
 
 class SpyFuParser(BaseCSVParser):
-    """Parses SpyFu PPC Keyword CSV exports for Paid Search Visibility data."""
+    """Parses SpyFu PPC CSV exports for Paid Search Visibility, Competitor PPC, and Historical Peak Performance."""
 
     def parse(self) -> Dict[str, Any]:
         result = {
@@ -15,6 +15,8 @@ class SpyFuParser(BaseCSVParser):
                 "est_monthly_spend": 0.0,
                 "top_paid_keywords": [],
                 "avg_cpc": 0.0,
+                "top_ppc_competitors": [],  # Top paid search competitors
+                "historical_peak_period": None,  # Top performing historical month/year
             },
             "status": "error",
         }
@@ -24,16 +26,21 @@ class SpyFuParser(BaseCSVParser):
             return result
 
         try:
-            # Check for keyword column variants
-            kw_col = next(
-                (c for c in self.df.columns if "keyword" in c), None
-            )
+            kw_col = next((c for c in self.df.columns if "keyword" in c), None)
             cpc_col = next((c for c in self.df.columns if "cpc" in c), None)
             cost_col = next(
-                (c for c in self.df.columns if "cost" in c or "spend" in c),
+                (c for c in self.df.columns if "cost" in c or "spend" in c), None
+            )
+            comp_col = next(
+                (c for c in self.df.columns if "competitor" in c or "domain" in c),
+                None,
+            )
+            date_col = next(
+                (c for c in self.df.columns if "date" in c or "month" in c or "period" in c),
                 None,
             )
 
+            # 1. Standard Paid Search Metrics
             if kw_col:
                 result["metrics"]["total_paid_keywords"] = len(self.df)
                 result["metrics"]["top_paid_keywords"] = (
@@ -50,6 +57,25 @@ class SpyFuParser(BaseCSVParser):
                     float(cost_vals.sum()), 2
                 )
 
+            # 2. PPC Competitor Extraction
+            if comp_col:
+                result["metrics"]["top_ppc_competitors"] = (
+                    self.df[comp_col].dropna().astype(str).unique().tolist()[:5]
+                )
+
+            # 3. Historical Peak Performance Analysis
+            if date_col and cost_col:
+                self.df["numeric_cost"] = pd.to_numeric(
+                    self.df[cost_col], errors="coerce"
+                )
+                peak_row = self.df.sort_values(
+                    by="numeric_cost", ascending=False
+                ).head(1)
+                if not peak_row.empty and pd.notnull(peak_row[date_col].values[0]):
+                    result["metrics"]["historical_peak_period"] = str(
+                        peak_row[date_col].values[0]
+                    )
+
             result["status"] = "success"
 
         except Exception as e:
@@ -59,4 +85,4 @@ class SpyFuParser(BaseCSVParser):
 
 
 if __name__ == "__main__":
-    print("--- SpyFu Parser Loaded ---")
+    print("--- Extended SpyFu Parser Loaded ---")
