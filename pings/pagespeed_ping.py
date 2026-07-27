@@ -1,80 +1,81 @@
-import os
+from urllib.parse import urlparse
 import requests
 
 
-def audit_pagespeed(url: str, api_key: str = None) -> dict:
-    """Queries Google PageSpeed Insights API (Free) for Performance & Accessibility scores.
+def audit_pagespeed(url: str, timeout: int = 15) -> dict:
+    """Fetches PageSpeed / Core Web Vitals performance metrics using Google's public PSI API endpoint.
 
-    Returns a standardized dictionary for Service Area #4 (Web Health) &
-    #7 (Accessibility).
+    Falls back cleanly if the API rate-limits or times out.
     """
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
 
-    # Default structure
+    parsed = urlparse(url)
+    domain = parsed.netloc or parsed.path
+
     result = {
-        "domain": url,
-        "performance_score": 0,
-        "accessibility_score": 0,
+        "domain": domain,
+        "performance_score": None,
+        "accessibility_score": None,
         "core_web_vitals": {
-            "lcp_ms": None,  # Largest Contentful Paint
-            "cls": None,  # Cumulative Layout Shift
-            "inp_ms": None,  # Interaction to Next Paint
+            "lcp_ms": None,
+            "cls": None,
+            "inp_ms": None,
         },
         "status": "error",
     }
 
-    # Endpoint URL (No API key needed for basic usage, but supported if added)
-    endpoint = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
-    params = {
-        "url": url,
-        "category": ["PERFORMANCE", "ACCESSIBILITY"],
-        "strategy": "MOBILE",
-    }
-
-    if api_key:
-        params["key"] = api_key
+    # Public Google PageSpeed Insights API URL
+    psi_endpoint = f"https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://{domain}&strategy=mobile"
 
     try:
-        response = requests.get(endpoint, params=params, timeout=30)
+        response = requests.get(psi_endpoint, timeout=timeout)
         if response.status_code == 200:
             data = response.json()
             lighthouse = data.get("lighthouseResult", {})
             categories = lighthouse.get("categories", {})
-            audits = lighthouse.get("audits", {})
 
-            # Extract 0-100 Scores (Google returns 0.0 to 1.0)
-            perf_raw = categories.get("performance", {}).get("score", 0) or 0
-            access_raw = (
-                categories.get("accessibility", {}).get("score", 0) or 0
+            # Extract Lighthouse Scores (scaled 0-100)
+            perf_score = categories.get("performance", {}).get("score")
+            access_score = categories.get("accessibility", {}).get("score")
+
+            result["performance_score"] = (
+                int(perf_score * 100) if perf_score is not None else None
+            )
+            result["accessibility_score"] = (
+                int(access_score * 100) if access_score is not None else None
             )
 
-            result["performance_score"] = int(perf_raw * 100)
-            result["accessibility_score"] = int(access_raw * 100)
+            # Extract Core Web Vitals
+            audits = lighthouse.get("audits", {})
+            lcp = audits.get("largest-contentful-paint", {}).get(
+                "numericValue"
+            )
+            cls = audits.get("cumulative-layout-shift", {}).get("numericValue")
+            inp = audits.get("interaction-to-next-paint", {}).get(
+                "numericValue"
+            )
 
-            # Extract Core Web Vitals (Lab Data)
-            result["core_web_vitals"]["lcp_ms"] = audits.get(
-                "largest-contentful-paint", {}
-            ).get("numericValue")
-            result["core_web_vitals"]["cls"] = audits.get(
-                "cumulative-layout-shift", {}
-            ).get("numericValue")
-            result["core_web_vitals"]["inp_ms"] = audits.get(
-                "total-blocking-time", {}
-            ).get("numericValue")  # TBT as INP proxy
-
+            result["core_web_vitals"] = {
+                "lcp_ms": round(lcp, 2) if lcp else None,
+                "cls": round(cls, 3) if cls is not None else None,
+                "inp_ms": round(inp, 2) if inp else None,
+            }
             result["status"] = "success"
+        else:
+            result["error"] = (
+                f"PageSpeed API HTTP {response.status_code}: Rate limit or domain issue."
+            )
+
+    except requests.exceptions.Timeout:
+        result["error"] = (
+            "PageSpeed API Request Timed Out (took longer than 15s)."
+        )
     except Exception as e:
-        result["error"] = str(e)
+        result["error"] = f"PageSpeed Audit Exception: {str(e)}"
 
     return result
 
 
-# Standalone Test Execution
 if __name__ == "__main__":
-    import json
-
-    test_url = "bowlerhat.co.uk"
-    print(f"--- Running PageSpeed API Ping for {test_url} ---")
-    data = audit_pagespeed(test_url)
-    print(json.dumps(data, indent=2))
+    print("--- Extended PageSpeed Ping Loaded ---")
