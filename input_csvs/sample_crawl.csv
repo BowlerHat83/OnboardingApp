@@ -1,0 +1,6 @@
+Address,Status Code,Indexability
+https://bowlerhat.co.uk/,200,Indexable
+https://bowlerhat.co.uk/about,200,Indexable
+https://bowlerhat.co.uk/services,200,Indexable
+https://bowlerhat.co.uk/old-page,404,Non-Indexable
+https://bowlerhat.co.uk/contact,200,Indexable

@@ -1,12 +1,12 @@
 {
   "client_domain": "bowlerhat.co.uk",
-  "audit_timestamp": "2026-07-27T13:41:36.934641",
-  "overall_score": 64,
+  "audit_timestamp": "2026-07-27T14:09:49.989716",
+  "overall_score": 59,
   "security": {
     "score": 30,
     "status": "success",
     "findings": [
-      "SSL Valid: True (50 days left)",
+      "SSL Valid: True (50 days remaining)",
       "HTTPS Enforced: False"
     ],
     "raw_data": {
@@ -32,11 +32,10 @@
     }
   },
   "ai_readiness": {
-    "score": 100,
+    "score": 70,
     "status": "success",
     "findings": [
-      "llms.txt Present: True",
-      "AI Crawlers Allowed: True"
+      "llms.txt Present: False"
     ],
     "raw_data": {
       "domain": "bowlerhat.co.uk",
@@ -49,18 +48,17 @@
     }
   },
   "website_health": {
-    "score": 86,
-    "status": "success_fallback",
+    "score": 80,
+    "status": "success",
     "findings": [
-      "Performance Score: 86",
-      "LCP: 754.34 ms"
+      "Performance Grade: 80"
     ],
     "raw_data": {
       "domain": "bowlerhat.co.uk",
-      "performance_score": 86,
+      "performance_score": 92,
       "accessibility_score": 80,
       "core_web_vitals": {
-        "lcp_ms": 754.34,
+        "lcp_ms": 425.43,
         "cls": 0.05,
         "inp_ms": 120
       },
@@ -71,8 +69,7 @@
     "score": 75,
     "status": "success",
     "findings": [
-      "Word Count: 1434",
-      "H1 Count: 5"
+      "H1 Tag Present: True"
     ],
     "raw_data": {
       "domain": "bowlerhat.co.uk",
@@ -98,11 +95,10 @@
     }
   },
   "gdpr_cookies": {
-    "score": 30,
+    "score": 50,
     "status": "success",
     "findings": [
-      "GDPR Risk Level: HIGH",
-      "Unblocked Trackers: Google Analytics / Tag Manager, Hotjar"
+      "Risk Level: Medium"
     ],
     "raw_data": {
       "domain": "bowlerhat.co.uk",
@@ -119,27 +115,41 @@
     }
   },
   "technical_seo": {
-    "score": null,
-    "status": "pending",
-    "findings": [],
-    "raw_data": {}
+    "score": 50,
+    "status": "success",
+    "findings": [
+      "Total Crawled URLs: 5",
+      "Broken Links / Errors (4xx/5xx): 1",
+      "Non-Indexable Pages: 1"
+    ],
+    "raw_data": {
+      "status_404": 1,
+      "non_indexable": 1,
+      "total_urls": 5
+    }
   },
   "analytics_tracking": {
     "score": null,
     "status": "pending",
-    "findings": [],
+    "findings": [
+      "No Analytics CSV found"
+    ],
     "raw_data": {}
   },
   "content_strategy": {
     "score": null,
     "status": "pending",
-    "findings": [],
+    "findings": [
+      "No Content CSV found"
+    ],
     "raw_data": {}
   },
   "cro_ux": {
     "score": null,
     "status": "pending",
-    "findings": [],
+    "findings": [
+      "No CRO CSV found"
+    ],
     "raw_data": {}
   }
 }
