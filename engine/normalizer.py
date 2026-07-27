@@ -260,11 +260,29 @@ def run_full_client_audit(domain: str, csv_dir: str = "input_csvs") -> ClientAud
             findings=["No BrightLocal CSV found in input_csvs/"]
         )
 
+    # --- AI Readiness & Generative Engine Optimization (Waikay CSV + Ping) ---
+    sec_ai = live_results.get("ai_readiness", AuditSection())
+    waikay_data = csv_data.get("waikay")
+    if waikay_data and waikay_data.get("status") == "success":
+        m = waikay_data.get("metrics", {})
+        gen_score = m.get("generative_visibility_score", 0)
+        mention_rate = m.get("brand_mention_rate", 0.0)
+        platforms = m.get("top_ai_platforms", [])
+
+        # Override or enrich findings with CSV data
+        sec_ai.score = gen_score if gen_score > 0 else sec_ai.score
+        sec_ai.findings.extend([
+            f"Generative Visibility Score: {gen_score}/100",
+            f"Brand Mention Rate: {mention_rate}%",
+            f"Top AI Engines Tracked: {', '.join(str(p) for p in platforms[:3]) if platforms else 'None'}"
+        ])
+        sec_ai.raw_data["waikay_metrics"] = m
+
     # Combine into schema record
     record = ClientAuditRecord(
         client_domain=domain,
         security=live_results.get("security", AuditSection()),
-        ai_readiness=live_results.get("ai_readiness", AuditSection()),
+        ai_readiness=sec_ai,
         website_health=live_results.get("website_health", AuditSection()),
         onpage_seo=live_results.get("onpage_seo", AuditSection()),
         gdpr_cookies=live_results.get("gdpr_cookies", AuditSection()),
