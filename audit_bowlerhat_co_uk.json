@@ -1,0 +1,145 @@
+{
+  "client_domain": "bowlerhat.co.uk",
+  "audit_timestamp": "2026-07-27T13:41:36.934641",
+  "overall_score": 64,
+  "security": {
+    "score": 30,
+    "status": "success",
+    "findings": [
+      "SSL Valid: True (50 days left)",
+      "HTTPS Enforced: False"
+    ],
+    "raw_data": {
+      "domain": "bowlerhat.co.uk",
+      "ssl": {
+        "valid": true,
+        "days_remaining": 50,
+        "issuer": "Let's Encrypt",
+        "error": null
+      },
+      "headers": {
+        "hsts": false,
+        "csp": false,
+        "x_frame_options": false,
+        "x_content_type": false,
+        "referrer_policy": false,
+        "grade_score": 30
+      },
+      "protocol": {
+        "https_enforced": false,
+        "http_version": "HTTP/1.1"
+      }
+    }
+  },
+  "ai_readiness": {
+    "score": 100,
+    "status": "success",
+    "findings": [
+      "llms.txt Present: True",
+      "AI Crawlers Allowed: True"
+    ],
+    "raw_data": {
+      "domain": "bowlerhat.co.uk",
+      "has_llms_txt": true,
+      "has_robots_txt": true,
+      "ai_crawlers_allowed": true,
+      "blocked_ai_bots": [],
+      "ai_score": 100,
+      "status": "success"
+    }
+  },
+  "website_health": {
+    "score": 86,
+    "status": "success_fallback",
+    "findings": [
+      "Performance Score: 86",
+      "LCP: 754.34 ms"
+    ],
+    "raw_data": {
+      "domain": "bowlerhat.co.uk",
+      "performance_score": 86,
+      "accessibility_score": 80,
+      "core_web_vitals": {
+        "lcp_ms": 754.34,
+        "cls": 0.05,
+        "inp_ms": 120
+      },
+      "status": "success_fallback"
+    }
+  },
+  "onpage_seo": {
+    "score": 75,
+    "status": "success",
+    "findings": [
+      "Word Count: 1434",
+      "H1 Count: 5"
+    ],
+    "raw_data": {
+      "domain": "bowlerhat.co.uk",
+      "headings": {
+        "h1_count": 5,
+        "h2_count": 20,
+        "h1_text": "Marketing is Changing",
+        "has_single_h1": false
+      },
+      "content": {
+        "word_count": 1434,
+        "has_meta_description": true,
+        "meta_description": "Bowler Hat helps small businesses get new leads with web design, SEO, PPC & Social. Get in touch for a Free audit and marketing plan today."
+      },
+      "conversion_ux": {
+        "form_count": 1,
+        "has_phone_link": true,
+        "has_email_link": false,
+        "has_viewport_tag": true
+      },
+      "score": 75,
+      "status": "success"
+    }
+  },
+  "gdpr_cookies": {
+    "score": 30,
+    "status": "success",
+    "findings": [
+      "GDPR Risk Level: HIGH",
+      "Unblocked Trackers: Google Analytics / Tag Manager, Hotjar"
+    ],
+    "raw_data": {
+      "domain": "bowlerhat.co.uk",
+      "cmp_detected": null,
+      "has_cmp": false,
+      "privacy_policy_found": true,
+      "unblocked_trackers_detected": [
+        "Google Analytics / Tag Manager",
+        "Hotjar"
+      ],
+      "gdpr_risk_level": "HIGH",
+      "compliance_score": 30,
+      "status": "success"
+    }
+  },
+  "technical_seo": {
+    "score": null,
+    "status": "pending",
+    "findings": [],
+    "raw_data": {}
+  },
+  "analytics_tracking": {
+    "score": null,
+    "status": "pending",
+    "findings": [],
+    "raw_data": {}
+  },
+  "content_strategy": {
+    "score": null,
+    "status": "pending",
+    "findings": [],
+    "raw_data": {}
+  },
+  "cro_ux": {
+    "score": null,
+    "status": "pending",
+    "findings": [],
+    "raw_data": {}
+  }
+}
