@@ -3,9 +3,18 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-# Import all pings from the pings package
+# Flexible import so it works with either function name in ai_readiness_ping.py
 try:
-    from pings.ai_readiness_ping import audit_ai_readiness
+    from pings.ai_readiness_ping import audit_ai_readiness as check_ai_readiness
+except ImportError:
+    try:
+        from pings.ai_readiness_ping import check_ai_readiness
+    except ImportError as e:
+        print(f"❌ Import Error in ai_readiness_ping: {e}")
+        sys.exit(1)
+
+# Import remaining pings
+try:
     from pings.gdpr_cookie_ping import audit_gdpr_cookies
     from pings.onpage_ping import audit_onpage
     from pings.pagespeed_ping import get_pagespeed_metrics
@@ -28,7 +37,7 @@ def run_all_pings(target_domain: str):
     # Define tasks for concurrent execution
     tasks = {
         "1. Security & Protocol": lambda: audit_security(target_domain),
-        "2. AI Readiness (robots/llms.txt)": lambda: audit_ai_readiness(
+        "2. AI Readiness (robots/llms.txt)": lambda: check_ai_readiness(
             target_domain
         ),
         "3. Website Health & Core Web Vitals": lambda: get_pagespeed_metrics(
