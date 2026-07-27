@@ -4,7 +4,7 @@ from parsers.base_parser import BaseCSVParser
 
 
 class SemrushParser(BaseCSVParser):
-    """Parses Semrush Domain Overview and Keyword CSV exports for Organic Search Data."""
+    """Parses Semrush Domain Overview and Keyword CSV exports for Organic Search & Competitor Data."""
 
     def parse(self) -> Dict[str, Any]:
         result = {
@@ -16,6 +16,8 @@ class SemrushParser(BaseCSVParser):
                 "authority_score": None,
                 "top_keywords": [],
                 "page_2_opportunities": 0,  # Keywords on positions 11-20
+                "competitors": [],  # Extracted organic competitors
+                "keyword_gap_count": 0,  # Missing keywords competitors rank for
             },
             "status": "error",
         }
@@ -25,18 +27,12 @@ class SemrushParser(BaseCSVParser):
             return result
 
         try:
-            # Standard Semrush Keyword Export Column Names
-            # Columns typically: 'Keyword', 'Position', 'Search Volume', 'Organic Traffic', etc.
-
-            col_map = {col: col for col in self.df.columns}
-
-            # Check if this is a Keyword export
+            # 1. Standard Keyword & Traffic Analysis
             if "keyword" in self.df.columns:
                 result["metrics"]["total_keywords"] = len(self.df)
 
                 # Page 2 Opportunities (Positions 11 to 20)
                 if "position" in self.df.columns:
-                    # Clean position column to numeric
                     positions = pd.to_numeric(
                         self.df["position"], errors="coerce"
                     )
@@ -45,19 +41,48 @@ class SemrushParser(BaseCSVParser):
                         page_2_mask.sum()
                     )
 
-                # Extract Top 5 Keywords by Volume or Position
-                kw_col = "keyword"
-                vol_col = "search volume" if "search volume" in self.df.columns else None
-
+                # Top Keywords
+                vol_col = (
+                    "search volume"
+                    if "search volume" in self.df.columns
+                    else None
+                )
                 if vol_col:
                     top_df = self.df.sort_values(
                         by=vol_col, ascending=False
                     ).head(5)
                     result["metrics"]["top_keywords"] = top_df[
-                        kw_col
+                        "keyword"
                     ].tolist()
                 else:
-                    result["metrics"]["top_keywords"] = self.df[kw_col].head(5).tolist()
+                    result["metrics"]["top_keywords"] = (
+                        self.df["keyword"].head(5).tolist()
+                    )
+
+            # 2. Competitor Domain & Organic Gap Extraction
+            competitor_cols = [
+                c
+                for c in self.df.columns
+                if "competitor" in c or "domain" in c or "overlap" in c
+            ]
+            if competitor_cols:
+                comp_col = competitor_cols[0]
+                unique_comps = (
+                    self.df[comp_col]
+                    .dropna()
+                    .astype(str)
+                    .str.strip()
+                    .unique()
+                    .tolist()
+                )
+                result["metrics"]["competitors"] = unique_comps[:5]
+
+            # Estimate Keyword Gaps (e.g., Competitor rank <= 10, Client rank > 20 or NaN)
+            if "competitor position" in self.df.columns and "position" in self.df.columns:
+                comp_pos = pd.to_numeric(self.df["competitor position"], errors="coerce")
+                client_pos = pd.to_numeric(self.df["position"], errors="coerce")
+                gap_mask = (comp_pos <= 10) & ((client_pos > 20) | (client_pos.isna()))
+                result["metrics"]["keyword_gap_count"] = int(gap_mask.sum())
 
             result["status"] = "success"
 
@@ -67,8 +92,5 @@ class SemrushParser(BaseCSVParser):
         return result
 
 
-# Quick Local Standalone Test Example
 if __name__ == "__main__":
-    import json
-
-    print("--- Semrush Parser Loaded Successfully ---")
+    print("--- Extended Semrush Parser Loaded ---")
