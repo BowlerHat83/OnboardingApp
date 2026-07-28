@@ -15,7 +15,6 @@ def audit_robots_txt(domain: str) -> Dict[str, Any]:
         if response.status_code == 200:
             content = response.text.lower()
             has_sitemap = "sitemap:" in content
-            # Checks if robots.txt blocks all crawlers without allow exceptions
             is_blocking_site = "disallow: /" in content and "allow:" not in content
             
             return {
