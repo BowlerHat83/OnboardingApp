@@ -1,31 +1,71 @@
-# engine/scorer.py
+"""
+engine/scorer.py - Standardized scoring engine with N/A support for inactive channels.
+"""
 
-def score_technical_seo(total_issues: int, errors: int, non_indexable: int) -> int:
-    """Calculates score for Technical SEO (Screaming Frog data)."""
-    base = 100
-    penalty = (errors * 5) + (total_issues * 0.5) + (non_indexable * 2)
-    return max(0, min(100, int(base - penalty)))
+from typing import Optional, List
 
 
-def score_organic_search(total_keywords: int, page_2_opps: int) -> int:
-    """Calculates score for Organic Search & Strategy (SEMrush data)."""
+def calculate_overall_score(category_scores: List[Optional[int]]) -> Optional[int]:
+    """
+    Calculates the overall average score, dynamically excluding N/A (None) sections.
+    """
+    valid_scores = [score for score in category_scores if score is not None]
+    if not valid_scores:
+        return None
+    return round(sum(valid_scores) / len(valid_scores))
+
+
+def score_organic_search(total_keywords: int, page_2_opps: int) -> Optional[int]:
+    """
+    Evaluates organic search performance.
+    Returns None (N/A) if no organic keywords exist.
+    """
     if total_keywords == 0:
-        return 0
-    score = 50 + min(30, total_keywords // 10) + min(20, page_2_opps // 5)
-    return max(0, min(100, int(score)))
+        return None  # Excluded from overall score, rendered as N/A
+
+    score = 50
+    if total_keywords > 50:
+        score += 30
+    elif total_keywords > 10:
+        score += 15
+
+    if page_2_opps > 5:
+        score += 20
+    elif page_2_opps > 0:
+        score += 10
+
+    return min(score, 100)
 
 
-def score_ppc_ads(paid_keywords: int, est_spend: float) -> int:
-    """Calculates score for PPC & Paid Search (SpyFu data)."""
+def score_ppc_ads(paid_keywords: int, est_spend: float) -> Optional[int]:
+    """
+    Evaluates active PPC campaigns.
+    Returns None (N/A) if the site does not run paid ads.
+    """
     if paid_keywords == 0 and est_spend == 0:
-        return 50  # Neutral score if no paid activity active
-    score = 60 + min(20, paid_keywords // 5) + min(20, int(est_spend // 100))
-    return max(0, min(100, int(score)))
+        return None  # Excluded from overall score calculation (N/A)
+
+    score = 50
+    if paid_keywords > 0:
+        score += 25
+    if est_spend > 0:
+        score += 25
+
+    return min(score, 100)
 
 
-def score_local_seo(gbp_score: int, citations: int) -> int:
-    """Calculates score for Local SEO (BrightLocal data)."""
-    if gbp_score > 0:
-        return gbp_score
-    score = 40 + min(60, citations * 2)
-    return max(0, min(100, int(score)))
+def score_security(has_ssl: bool, https_enforced: bool, missing_headers_count: int) -> int:
+    """
+    Scores security posture based on SSL, HTTPS redirection, and security headers.
+    """
+    score = 0
+    if has_ssl:
+        score += 30
+    if https_enforced:
+        score += 30
+    
+    # Deduct 8 points per missing recommended security header (max 5 headers = 40 pts)
+    header_score = max(0, 40 - (missing_headers_count * 8))
+    score += header_score
+
+    return score
