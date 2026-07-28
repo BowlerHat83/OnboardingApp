@@ -6,9 +6,10 @@ from models.audit_schema import ClientAuditRecord, AuditSection
 # Live Network Pings
 from pings.security_ping import audit_security
 from pings.ai_readiness_ping import check_ai_readiness
-from pings.pagespeed_ping import audit_pagespeed
+from pings.performance_ping import audit_performance
+from pings.robotstxt_ping import audit_robots_txt
 from pings.onpage_ping import audit_onpage
-from pings.gdpr_cookie_ping import audit_gdpr_cookies
+from pings.gdpr_cookie_ping import audit_gdpr_and_wcag
 
 # OOP CSV Parsers (Phase 1 Vendors)
 from parsers.screaming_frog_parser import ScreamingFrogParser
@@ -60,17 +61,31 @@ def run_live_pings(domain: str) -> Dict[str, AuditSection]:
     except Exception as e:
         results["ai_readiness"] = AuditSection(status="error", findings=[f"AI Readiness Ping Failed: {e}"])
 
-    # 3. Website Health / PageSpeed Ping
+    # 3. Website Health / Performance Ping
     try:
-        speed_raw = audit_pagespeed(domain)
+        perf_raw = audit_performance(domain)
+        ttfb = perf_raw.get("ttfb_seconds", 0.0)
+        payload = perf_raw.get("payload_mb", 0.0)
+        load_5g = perf_raw.get("estimated_5g_load_time", 0.0)
+        
+        # Performance scoring calculation
+        perf_score = 100
+        if not perf_raw.get("ttfb_passed", True): perf_score -= 25
+        if not perf_raw.get("payload_passed", True): perf_score -= 25
+        if not perf_raw.get("5g_passed", True): perf_score -= 25
+
         results["website_health"] = AuditSection(
-            score=speed_raw.get("score", 80),
-            status="success",
-            findings=[f"Performance Grade: {speed_raw.get('score', 80)}"],
-            raw_data=speed_raw
+            score=max(0, perf_score),
+            status="success" if perf_score >= 70 else "warning",
+            findings=[
+                f"Time To First Byte (TTFB): {ttfb}s ({'Pass' if perf_raw.get('ttfb_passed') else 'Fail'})",
+                f"Page Payload: {payload} MB ({'Pass' if perf_raw.get('payload_passed') else 'Fail'})",
+                f"Estimated 5G Load Time: {load_5g}s ({'Pass' if perf_raw.get('5g_passed') else 'Fail'})"
+            ],
+            raw_data=perf_raw
         )
     except Exception as e:
-        results["website_health"] = AuditSection(status="error", findings=[f"PageSpeed Ping Failed: {e}"])
+        results["website_health"] = AuditSection(status="error", findings=[f"Performance Ping Failed: {e}"])
 
     # 4. On-Page SEO Ping
     try:
@@ -84,17 +99,44 @@ def run_live_pings(domain: str) -> Dict[str, AuditSection]:
     except Exception as e:
         results["onpage_seo"] = AuditSection(status="error", findings=[f"On-Page Ping Failed: {e}"])
 
-    # 5. GDPR Cookies Ping
+    # 5. GDPR Cookies & WCAG 2.2 Ping
     try:
-        gdpr_raw = audit_gdpr_cookies(domain)
+        gdpr_raw = audit_gdpr_and_wcag(domain)
+        risk = gdpr_raw.get("cookie_risk_level", "Low")
+        wcag_pass = gdpr_raw.get("wcag_pass", True)
+        
+        gdpr_score = 100 if risk == "Low" else (70 if risk == "Medium" else 40)
+        if not wcag_pass: gdpr_score -= 20
+
         results["gdpr_cookies"] = AuditSection(
-            score=gdpr_raw.get("score", 50),
-            status="success",
-            findings=[f"Risk Level: {gdpr_raw.get('risk_level', 'Medium')}"],
+            score=max(0, gdpr_score),
+            status="success" if gdpr_score >= 70 else "warning",
+            findings=[
+                f"Cookie Security Risk Level: {risk}",
+                f"Insecure Cookies Detected: {gdpr_raw.get('insecure_cookies', 0)}",
+                f"WCAG 2.2 Lang Attribute Present: {gdpr_raw.get('wcag_has_lang_attribute', False)}",
+                f"WCAG Unlabeled Form Inputs: {gdpr_raw.get('wcag_unlabeled_inputs', 0)}"
+            ],
             raw_data=gdpr_raw
         )
     except Exception as e:
-        results["gdpr_cookies"] = AuditSection(status="error", findings=[f"GDPR Ping Failed: {e}"])
+        results["gdpr_cookies"] = AuditSection(status="error", findings=[f"GDPR/WCAG Ping Failed: {e}"])
+
+    # 6. Robots.txt Directives Ping
+    try:
+        robots_raw = audit_robots_txt(domain)
+        results["robots_txt"] = AuditSection(
+            score=100 if robots_raw.get("exists") and not robots_raw.get("is_blocking_site") else 30,
+            status="success" if robots_raw.get("exists") else "warning",
+            findings=[
+                f"Robots.txt Exists: {robots_raw.get('exists', False)}",
+                f"Sitemap Directive Found: {robots_raw.get('has_sitemap_link', False)}",
+                f"Blocks Site Crawling: {robots_raw.get('is_blocking_site', False)}"
+            ],
+            raw_data=robots_raw
+        )
+    except Exception as e:
+        results["robots_txt"] = AuditSection(status="error", findings=[f"Robots.txt Ping Failed: {e}"])
 
     return results
 
@@ -153,8 +195,10 @@ def run_full_client_audit(domain: str, csv_dir: str = "input_csvs") -> ClientAud
     # 2. Parse Vendor CSV Exports
     csv_data = parse_vendor_csvs(csv_dir)
 
-    # --- Technical SEO (Screaming Frog) ---
+    # --- Technical SEO (Screaming Frog + Robots.txt Ping) ---
     sf_data = csv_data.get("screaming_frog")
+    robots_section = live_results.get("robots_txt", AuditSection())
+    
     if sf_data and sf_data.get("status") == "success":
         m = sf_data.get("metrics", {})
         total_issues = m.get("total_issues", 0)
@@ -162,23 +206,28 @@ def run_full_client_audit(domain: str, csv_dir: str = "input_csvs") -> ClientAud
         non_idx = m.get("non_indexable_url_count", 0)
 
         score = score_technical_seo(total_issues, errors, non_idx)
+        
+        findings = [
+            f"Total Issues Flagged: {total_issues}",
+            f"High-Priority Errors / 404s: {errors}",
+            f"Missing Page Titles: {m.get('missing_titles', 0)}",
+            f"Missing H1 Headers: {m.get('missing_h1s', 0)}",
+            f"Non-Indexable URLs: {non_idx}",
+        ]
+        findings.extend(robots_section.findings)
+
         sec_technical = AuditSection(
             score=score,
             status="success",
-            findings=[
-                f"Total Issues Flagged: {total_issues}",
-                f"High-Priority Errors / 404s: {errors}",
-                f"Missing Page Titles: {m.get('missing_titles', 0)}",
-                f"Missing H1 Headers: {m.get('missing_h1s', 0)}",
-                f"Non-Indexable URLs: {non_idx}",
-            ],
-            raw_data=sf_data
+            findings=findings,
+            raw_data={"screaming_frog": sf_data, "robots_txt": robots_section.raw_data}
         )
     else:
         sec_technical = AuditSection(
-            score=None,
-            status="pending",
-            findings=["No Screaming Frog CSV found in input_csvs/"]
+            score=robots_section.score,
+            status="pending" if not robots_section.findings else "warning",
+            findings=["No Screaming Frog CSV found in input_csvs/"] + robots_section.findings,
+            raw_data={"robots_txt": robots_section.raw_data}
         )
 
     # --- Organic Search & Strategy (SEMrush) ---
@@ -269,7 +318,6 @@ def run_full_client_audit(domain: str, csv_dir: str = "input_csvs") -> ClientAud
         mention_rate = m.get("brand_mention_rate", 0.0)
         platforms = m.get("top_ai_platforms", [])
 
-        # Override or enrich findings with CSV data
         sec_ai.score = gen_score if gen_score > 0 else sec_ai.score
         sec_ai.findings.extend([
             f"Generative Visibility Score: {gen_score}/100",
@@ -278,7 +326,7 @@ def run_full_client_audit(domain: str, csv_dir: str = "input_csvs") -> ClientAud
         ])
         sec_ai.raw_data["waikay_metrics"] = m
 
-    # Combine into schema record
+    # Combine into final schema record
     record = ClientAuditRecord(
         client_domain=domain,
         security=live_results.get("security", AuditSection()),
