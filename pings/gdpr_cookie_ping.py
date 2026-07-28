@@ -13,7 +13,8 @@ def audit_gdpr_and_wcag(domain: str) -> Dict[str, Any]:
     """
     url = f"https://{domain}" if not domain.startswith("http") else domain
     try:
-        response = requests.get(url, timeout=8)
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        response = requests.get(url, headers=headers, timeout=8)
         
         # 1. GDPR / Cookie Audit
         cookies = response.cookies
