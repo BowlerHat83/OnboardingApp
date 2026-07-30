@@ -1,4 +1,0 @@
-﻿Address,Title 1,H1-1,Status Code,Indexability
-https://example.com/,Home Page,Welcome to Example,200,Indexable
-https://example.com/about,,About Us,200,Indexable
-https://example.com/missing,Missing Title,,404,Non-Indexable
