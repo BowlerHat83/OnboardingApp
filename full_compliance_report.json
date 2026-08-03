@@ -1,0 +1,135 @@
+{
+  "url": "https://www.bowlerhat.co.uk",
+  "timestamp": "2026-07-30T11:21:38.356Z",
+  "accessibility_wcag22": {
+    "summary": {
+      "total_violations": 4,
+      "passes_count": 31,
+      "incomplete_count": 3,
+      "impact_breakdown": {
+        "critical": 1,
+        "serious": 3,
+        "moderate": 0,
+        "minor": 0
+      }
+    },
+    "violations": [
+      {
+        "rule_id": "color-contrast",
+        "impact": "serious",
+        "description": "Ensures the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+        "help_url": "https://dequeuniversity.com/rules/axe/4.9/color-contrast?application=axeAPI",
+        "nodes_count": 29,
+        "nodes": [
+          {
+            "target": [
+              "#menu-1-48d3eeb > .menu-item-home.current-menu-item.page_item > .elementor-item-active[aria-current=\"page\"][href$=\"bowlerhat.co.uk/\"]"
+            ],
+            "html_snippet": "<a href=\"https://www.bowlerhat.co.uk/\" aria-current=\"page\" data-ps2id-api=\"true\" class=\"elementor-item elementor-item-active\">Home</a>",
+            "failure_summary": "Fix any of the following:\n  Element has insufficient color contrast of 4.01 (foreground color: #007aff, background color: #ffffff, font size: 13.5pt (18px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              ".elementor-element-7135dfc > .elementor-widget-container > .elementor-button-wrapper > .elementor-size-md.elementor-button-link.elementor-button > .elementor-button-content-wrapper > .elementor-button-text"
+            ],
+            "html_snippet": "<span class=\"elementor-button-text\">Book a Call</span>",
+            "failure_summary": "Fix any of the following:\n  Element has insufficient color contrast of 4.01 (foreground color: #ffffff, background color: #007aff, font size: 12.0pt (16px), font weight: bold). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              ".elementor-element-8655aa7 > .elementor-widget-container > .elementor-button-wrapper > .elementor-size-md.elementor-button-link.elementor-button > .elementor-button-content-wrapper > .elementor-button-text"
+            ],
+            "html_snippet": "<span class=\"elementor-button-text\">Learn More</span>",
+            "failure_summary": "Fix any of the following:\n  Element has insufficient color contrast of 4.01 (foreground color: #ffffff, background color: #007aff, font size: 12.0pt (16px), font weight: bold). Expected contrast ratio of 4.5:1"
+          }
+        ]
+      },
+      {
+        "rule_id": "image-alt",
+        "impact": "critical",
+        "description": "Ensures <img> elements have alternate text or a role of none or presentation",
+        "help_url": "https://dequeuniversity.com/rules/axe/4.9/image-alt?application=axeAPI",
+        "nodes_count": 1,
+        "nodes": [
+          {
+            "target": [
+              "a[target=\"_blank\"] > img[decoding=\"async\"]"
+            ],
+            "html_snippet": "<img decoding=\"async\" src=\"https://www.gstatic.com/partners/badge/images/2022/PartnerBadgeClickable.svg\">",
+            "failure_summary": "Fix any of the following:\n  Element does not have an alt attribute\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute\n  Element's default semantics were not overridden with role=\"none\" or role=\"presentation\""
+          }
+        ]
+      },
+      {
+        "rule_id": "link-name",
+        "impact": "serious",
+        "description": "Ensures links have discernible text",
+        "help_url": "https://dequeuniversity.com/rules/axe/4.9/link-name?application=axeAPI",
+        "nodes_count": 5,
+        "nodes": [
+          {
+            "target": [
+              "a[href$=\"www.bowlerhat.co.uk\"]"
+            ],
+            "html_snippet": "<a href=\"https://www.bowlerhat.co.uk\">",
+            "failure_summary": "Fix all of the following:\n  Element is in tab order and does not have accessible text\n\nFix any of the following:\n  Element does not have text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute"
+          },
+          {
+            "target": [
+              ".post-15488.category-ai > .elementor-post__card > .elementor-post__thumbnail__link"
+            ],
+            "html_snippet": "<a class=\"elementor-post__thumbnail__link\" href=\"https://www.bowlerhat.co.uk/optimising-for-google-in-the-age-of-ai-a-laymans-guide/\" tabindex=\"-1\">",
+            "failure_summary": "Fix any of the following:\n  Element does not have text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute"
+          },
+          {
+            "target": [
+              ".post-15333.category-local-seo > .elementor-post__card > .elementor-post__thumbnail__link"
+            ],
+            "html_snippet": "<a class=\"elementor-post__thumbnail__link\" href=\"https://www.bowlerhat.co.uk/are-standard-organic-results-losing-value/\" tabindex=\"-1\">",
+            "failure_summary": "Fix any of the following:\n  Element does not have text that is visible to screen readers\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element has no title attribute"
+          }
+        ]
+      },
+      {
+        "rule_id": "target-size",
+        "impact": "serious",
+        "description": "Ensure touch target have sufficient size and space",
+        "help_url": "https://dequeuniversity.com/rules/axe/4.9/target-size?application=axeAPI",
+        "nodes_count": 1,
+        "nodes": [
+          {
+            "target": [
+              "#form-field-field_0eb9f3c-0"
+            ],
+            "html_snippet": "<input type=\"checkbox\" value=\"SEO\" id=\"form-field-field_0eb9f3c-0\" name=\"form_fields[field_0eb9f3c][]\">",
+            "failure_summary": "Fix any of the following:\n  Target has insufficient size (13px by 13px, should be at least 24px by 24px)\n  Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 23.2px instead of at least 24px."
+          }
+        ]
+      }
+    ]
+  },
+  "privacy_and_cookies": {
+    "cmp_detected": "Cookiebot",
+    "cookie_summary": {
+      "total_cookies": 1,
+      "first_party_count": 1,
+      "third_party_count": 0,
+      "pre_consent_tracking_flag": false,
+      "flagged_tracking_cookies": []
+    },
+    "all_cookies": {
+      "first_party": [
+        {
+          "name": "__cf_bm",
+          "domain": ".www.bowlerhat.co.uk",
+          "path": "/",
+          "expires": 1785412297.498423,
+          "http_only": true,
+          "secure": true,
+          "same_site": "None"
+        }
+      ],
+      "third_party": []
+    }
+  }
+}
