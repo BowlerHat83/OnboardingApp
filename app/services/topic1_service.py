@@ -1,4 +1,5 @@
 import logging
+import traceback
 from typing import Dict, Any
 from app.collectors.a11y_auditor import ComprehensiveAuditor
 
@@ -23,9 +24,10 @@ class Topic1Service:
                 "data": report
             }
         except Exception as e:
-            logger.error(f"[Topic 1] Error auditing {url}: {str(e)}")
+            error_msg = str(e) or repr(e)
+            logger.error(f"[Topic 1] Error auditing {url}: {error_msg}\n{traceback.format_exc()}")
             return {
                 "status": "error",
                 "topic": "Accessibility & Privacy",
-                "error": str(e)
+                "error": error_msg
             }
