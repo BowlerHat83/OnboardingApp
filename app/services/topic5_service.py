@@ -18,8 +18,25 @@ class Topic5Service:
         if self.df.empty:
             return self._build_zero_spend_response("No SpyFu paid data provided.")
 
+        # Default Column Injection
+        default_cols = {
+            "keyword": "",
+            "search_volume": 0,
+            "cpc": 0.0,
+            "monthly_spend": 0.0,
+            "impression_share": 0.0,
+            "top_competitor": ""
+        }
+        for col, default_val in default_cols.items():
+            if col not in self.df.columns:
+                self.df[col] = default_val
+
+        # Sanitize numeric columns
+        for num_col in ["search_volume", "cpc", "monthly_spend", "impression_share"]:
+            self.df[num_col] = pd.to_numeric(self.df[num_col], errors="coerce").fillna(0)
+
         # Filter out empty keyword rows
-        active_df = self.df[self.df['keyword'] != ''].copy()
+        active_df = self.df[self.df['keyword'].astype(str).str.strip() != ''].copy()
         paid_keywords_count = int(len(active_df))
 
         if paid_keywords_count == 0:
@@ -28,19 +45,19 @@ class Topic5Service:
         # 1. Total Estimated Spend & Average CPC
         total_monthly_spend = float(active_df['monthly_spend'].sum())
         
-        # If row-level spend is not broken down, fall back to domain metadata
+        # Fall back to domain metadata if needed
         if total_monthly_spend == 0.0 and 'estimated_monthly_spend' in self.domain_meta:
             total_monthly_spend = float(self.domain_meta['estimated_monthly_spend'])
 
         active_cpc_series = active_df[active_df['cpc'] > 0]['cpc']
         avg_cpc = float(active_cpc_series.mean()) if not active_cpc_series.empty else 0.0
 
-        # 2. Top 25 Keywords alongside Search Volume
+        # 2. Top 25 Keywords
         top_25_df = active_df.sort_values(by=['search_volume'], ascending=False).head(25)
         top_25_keywords = []
         for _, row in top_25_df.iterrows():
             top_25_keywords.append({
-                "keyword": row['keyword'],
+                "keyword": str(row['keyword']),
                 "search_volume": int(row['search_volume']),
                 "estimated_cpc_usd": round(float(row['cpc']), 2),
                 "estimated_monthly_spend_usd": round(float(row['monthly_spend']), 2)
@@ -51,11 +68,10 @@ class Topic5Service:
         if avg_impression_share > 0:
             market_share_pct = round(float(avg_impression_share), 2)
         else:
-            total_market_volume = active_df['search_volume'].sum()
             market_share_pct = min(100.0, round(float((paid_keywords_count / 200.0) * 100), 1))
 
         # 4. Paid Competitor Comparisons
-        competitor_series = active_df[active_df['top_competitor'] != '']['top_competitor']
+        competitor_series = active_df[active_df['top_competitor'].astype(str).str.strip() != '']['top_competitor']
         competitor_counts = competitor_series.value_counts().head(5)
         
         competitor_comparisons = []
@@ -66,7 +82,7 @@ class Topic5Service:
                 "relative_threat_level": "High" if overlap_count > (paid_keywords_count * 0.2) else "Moderate"
             })
 
-        # 5. Historic Paid Performance Trend
+        # 5. Historic Performance
         historic_performance = {
             "status": "Active Paid Campaigns Detected",
             "historical_tracking_available": True,
@@ -97,7 +113,6 @@ class Topic5Service:
         return "Zero Ad Spend"
 
     def _build_zero_spend_response(self, reason: str) -> Dict[str, Any]:
-        """Returns structured benchmark context when zero paid ads are detected."""
         return {
             "status": "success",
             "paid_active": False,

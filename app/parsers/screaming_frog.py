@@ -1,73 +1,86 @@
-import os
 import pandas as pd
+import numpy as np
+import logging
+from typing import Dict, Any
 
-class ScreamingFrogParser:
+logger = logging.getLogger(__name__)
+
+def parse_screaming_frog_csv(csv_path: str) -> Dict[str, Any]:
     """
-    Parses and normalizes CSV exports from Screaming Frog CLI.
+    Parses a Screaming Frog 'Internal:All' CSV export file.
+    Cleans column headers, extracts aggregate health metrics, 
+    and handles NaN/Inf values for clean JSON output.
     """
-    COLUMN_MAP = {
-        'Address': 'url',
-        'URL': 'url',
-        'Content Type': 'content_type',
-        'Content': 'content_type',
-        'Status Code': 'status_code',
-        'Status': 'status_text',  # Separate from numeric code to avoid pandas collisions
-        'Indexability': 'indexability',
-        'Indexability Status': 'indexability_status',
-        'Title 1': 'title',
-        'Meta Description 1': 'meta_description',
-        'H1-1': 'h1',
-        'Canonical Link Element 1': 'canonical_url',
-        'Word Count': 'word_count'
-    }
-
-    def __init__(self, csv_filepath: str):
-        if not os.path.exists(csv_filepath):
-            raise FileNotFoundError(f"Export file not found at: {csv_filepath}")
-        self.csv_filepath = csv_filepath
-        self.clean_df = pd.DataFrame()
-
-    def parse(self, html_only: bool = False, indexable_only: bool = False) -> pd.DataFrame:
-        """
-        Loads CSV and returns a cleaned DataFrame.
-        Defaults html_only & indexable_only to False for full Technical Data (Topic 2) analysis.
-        """
+    try:
+        # Read CSV with flexible encoding handling
         try:
-            raw_df = pd.read_csv(self.csv_filepath, encoding='utf-8')
+            df = pd.read_csv(csv_path, low_memory=False)
         except UnicodeDecodeError:
-            raw_df = pd.read_csv(self.csv_filepath, encoding='utf-8-sig')
+            df = pd.read_csv(csv_path, encoding="latin1", low_memory=False)
 
-        # Rename matching columns
-        renamed_cols = {col: self.COLUMN_MAP[col] for col in raw_df.columns if col in self.COLUMN_MAP}
-        df = raw_df.rename(columns=renamed_cols).copy()
+        if df.empty:
+            logger.warning(f"[Screaming Frog Parser] File {csv_path} is empty.")
+            return {"summary": {}, "rows_count": 0, "sample_data": []}
 
-        # Deduplicate column names if any collisions occurred
-        df = df.loc[:, ~df.columns.duplicated()].copy()
+        # Normalize column headers (lowercase, underscores, strip special chars)
+        df.columns = (
+            df.columns.astype(str)
+            .str.strip()
+            .str.lower()
+            .str.replace(" ", "_", regex=False)
+            .str.replace("-", "_", regex=False)
+            .str.replace("/", "_", regex=False)
+        )
 
-        # Fill missing text fields safely
-        for col in ['title', 'meta_description', 'h1', 'canonical_url', 'indexability']:
-            if col in df.columns:
-                df[col] = df[col].fillna('').astype(str)
+        total_rows = len(df)
 
-        # Safely parse numeric status codes
-        if 'status_code' in df.columns:
-            df['status_code'] = pd.to_numeric(df['status_code'], errors='coerce').fillna(0).astype(int)
+        # Helper getters to accommodate slight header variations across SF versions
+        def get_col(candidates):
+            for col in candidates:
+                if col in df.columns:
+                    return df[col]
+            return pd.Series(dtype=object)
 
-        # Optional filters
-        if html_only and 'content_type' in df.columns:
-            df = df[df['content_type'].astype(str).str.contains('text/html', case=False, na=False)]
+        status_codes = get_col(["status_code"])
+        indexability = get_col(["indexability"])
+        titles = get_col(["title_1", "title"])
+        meta_desc = get_col(["meta_description_1", "meta_description"])
+        h1s = get_col(["h1_1", "h1"])
+        canonical_link = get_col(["canonical_link_element_1", "canonical"])
 
-        if indexable_only:
-            if 'status_code' in df.columns:
-                df = df[df['status_code'] == 200]
-            if 'indexability' in df.columns:
-                df = df[df['indexability'].astype(str).str.lower() == 'indexable']
+        # Calculate high-level audit aggregates
+        summary = {
+            "total_urls_crawled": total_rows,
+            "status_code_breakdown": (
+                status_codes.value_counts().dropna().to_dict()
+                if not status_codes.empty else {}
+            ),
+            "indexability_breakdown": (
+                indexability.value_counts().dropna().to_dict()
+                if not indexability.empty else {}
+            ),
+            "issues_summary": {
+                "missing_title": int(titles.isna().sum()) if not titles.empty else 0,
+                "missing_meta_description": int(meta_desc.isna().sum()) if not meta_desc.empty else 0,
+                "missing_h1": int(h1s.isna().sum()) if not h1s.empty else 0,
+                "missing_canonical": int(canonical_link.isna().sum()) if not canonical_link.empty else 0,
+                "non_200_status": int((status_codes != 200).sum()) if not status_codes.empty else 0,
+            }
+        }
 
-        self.clean_df = df.reset_index(drop=True)
-        return self.clean_df
+        # Replace NaN/Inf values with None for JSON serialization safety
+        df_cleaned = df.replace({np.nan: None, np.inf: None, -np.inf: None})
 
-    # Add this at the bottom of app/parsers/screaming_frog.py:
+        return {
+            "summary": summary,
+            "rows_count": total_rows,
+            "records": df_cleaned.to_dict(orient="records")
+        }
 
-def parse_screaming_frog_csv(csv_filepath: str, html_only: bool = False, indexable_only: bool = False) -> pd.DataFrame:
-    parser = ScreamingFrogParser(csv_filepath)
-    return parser.parse(html_only=html_only, indexable_only=indexable_only)
+    except Exception as e:
+        logger.error(f"[Screaming Frog Parser] Error processing {csv_path}: {str(e)}")
+        return {
+            "error": f"Failed to parse Screaming Frog CSV: {str(e)}",
+            "summary": {},
+            "records": []
+        }
