@@ -1,6 +1,6 @@
+venv/
 __pycache__/
 *.pyc
-venv/
-temp_exports/*.csv
-temp_uploads/*
-!temp_uploads/.gitkeep
+temp_uploads/
+temp_exports/
+.env

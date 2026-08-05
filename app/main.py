@@ -1,28 +1,44 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, HttpUrl
-from typing import Dict, Any, List
+import asyncio
 import datetime
+import traceback
+from typing import Dict, Any, Optional
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, HttpUrl
+
+from app.collectors.a11y_auditor import ComprehensiveAuditor
 
 app = FastAPI(
-    title="Comprehensive Site Audit API",
-    description="Runs complete 7-topic site audits and compiles executive-level summaries.",
+    title="Comprehensive Site Audit & Onboarding API",
     version="1.0.0"
 )
 
-# --- Schemas ---
+# Enable CORS for Next.js frontend
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+auditor = ComprehensiveAuditor()
+
 class AuditRequest(BaseModel):
-    target_url: HttpUrl
+    url: Optional[HttpUrl] = None
+    target_url: Optional[HttpUrl] = None
 
-class ExecutiveSummary(BaseModel):
-    audit_date: str
-    target_url: str
-    overall_score: float
-    overall_grade: str
-    status: str
-    topic_scores: Dict[str, Dict[str, Any]]
-    top_priority_actions: List[str]
+    def get_url_str(self) -> str:
+        target = self.url or self.target_url
+        if not target:
+            raise ValueError("Either 'url' or 'target_url' must be provided.")
+        return str(target)
 
-# --- Helper Functions ---
 def calculate_grade(score: float) -> str:
     if score >= 90: return "A"
     if score >= 80: return "B"
@@ -30,54 +46,75 @@ def calculate_grade(score: float) -> str:
     if score >= 60: return "D"
     return "F"
 
-# --- Full Audit Runner Endpoint ---
-@app.post(
-    "/api/v1/audit/run-full", 
-    response_model=ExecutiveSummary, 
-    tags=["Full Site Audit"],
-    summary="Run Full 7-Topic Audit Strategy",
-    description="Triggers the complete evaluation sequence (Topics 1-7) and returns a clean report for executive presentation."
-)
+@app.post("/api/v1/audit/run-full", tags=["Full Site Audit"])
 async def run_full_audit(request: AuditRequest) -> Dict[str, Any]:
-    target = str(request.target_url)
-    
     try:
-        # -------------------------------------------------------------
-        # In production, call your individual module functions here:
-        # t1 = run_topic_1(target)
-        # t2 = run_topic_2(target)
-        # ...
-        # -------------------------------------------------------------
+        target = request.get_url_str()
+        print(f"\n--- STARTING AUDIT FOR: {target} ---")
         
-        # Aggregated topic results mapping
-        topic_scores = {
-            "Topic 1 - Technical & Accessibility": {"score": 88.0, "status": "PASS"},
-            "Topic 2 - Performance & Core Web Vitals": {"score": 75.0, "status": "PASS"},
-            "Topic 3 - Organic Search Visibility": {"score": 27.33, "status": "CRITICAL_ACTION_NEEDED"},
-            "Topic 4 - AI & GEO Visibility": {"score": 70.93, "status": "PASS"},
-            "Topic 5 - Paid PPC & Ad Intelligence": {"score": 92.14, "status": "PASS"},
-            "Topic 6 - Conversion Architecture": {"score": 53.0, "status": "NEEDS_IMPROVEMENT"},
-            "Topic 7 - Local SEO & GBP": {"score": 85.0, "status": "PASS"}
+        # Offload Playwright sync API execution to a separate worker thread
+        a11y_results = await asyncio.to_thread(auditor.scan_page, target)
+        print("--- AUDIT COMPLETED SUCCESSFULLY ---")
+
+        wcag_data = a11y_results.get("accessibility_wcag22") or {}
+        wcag_summary = wcag_data.get("summary") or {}
+        wcag_violations = wcag_summary.get("total_violations", 0)
+        
+        gdpr_data = a11y_results.get("gdpr_compliance") or {
+            "banner_detected": False,
+            "pre_consent_cookie_count": 0,
+            "tracking_cookie_count": 0,
+            "is_compliant": False,
+            "detected_script": "Custom / Unknown CMP",
+            "summary_reason": "GDPR compliance check failed."
+        }
+        
+        # Calculate scores
+        t1_score = max(0.0, round(100.0 - (wcag_violations * 5.0), 2))
+        gdpr_score = 100.0 if gdpr_data.get("is_compliant") else 50.0 if gdpr_data.get("banner_detected") else 0.0
+
+        topic_analysis = {
+            "topic_1a": {
+                "title": "Technical & WCAG 2.2 Accessibility",
+                "score": t1_score,
+                "status": "PASS" if t1_score >= 80 else "NEEDS_IMPROVEMENT" if t1_score >= 60 else "CRITICAL_ACTION_NEEDED",
+                "metrics": [
+                    {"label": "WCAG Violations", "value": str(wcag_violations), "type": "warning" if wcag_violations > 0 else "good"},
+                    {"label": "Critical Issues", "value": str(wcag_summary.get("critical", 0)), "type": "bad" if wcag_summary.get("critical", 0) > 0 else "good"}
+                ]
+            },
+            "topic_1b": {
+                "title": "GDPR & Cookie Compliance",
+                "score": gdpr_score,
+                "status": "PASS" if gdpr_data.get("is_compliant") else "CRITICAL_ACTION_NEEDED",
+                "metrics": [
+                    {"label": "Consent Banner", "value": "Detected" if gdpr_data.get("banner_detected") else "Missing", "type": "good" if gdpr_data.get("banner_detected") else "bad"},
+                    {"label": "Pre-consent Cookies", "value": str(gdpr_data.get("tracking_cookie_count", 0)), "type": "good" if gdpr_data.get("tracking_cookie_count", 0) == 0 else "bad"},
+                    {"label": "Detected CMP Script", "value": gdpr_data.get("detected_script", "Custom / Unknown CMP"), "type": "good"}
+                ]
+            }
         }
 
-        # Calculate composite score across all 7 topics
-        total_score = sum(item["score"] for item in topic_scores.values())
-        overall_score = round(total_score / len(topic_scores), 2)
-        overall_grade = calculate_grade(overall_score)
+        total_score = sum(item["score"] for item in topic_analysis.values())
+        overall_score = round(total_score / len(topic_analysis), 2)
 
         return {
             "audit_date": datetime.date.today().strftime("%B %d, %Y"),
             "target_url": target,
             "overall_score": overall_score,
-            "overall_grade": overall_grade,
+            "overall_grade": calculate_grade(overall_score),
             "status": "Audit Complete",
-            "topic_scores": topic_scores,
+            "topic_analysis": topic_analysis,
+            "gdpr_compliance": gdpr_data,
             "top_priority_actions": [
-                "Technical: Inject missing meta descriptions and self-referencing canonical tags.",
-                "Conversion Architecture: Deploy above/below-the-fold lead capture forms.",
-                "SEO: Clean up the 15% NAP discrepancy across local citation directories.",
-                "Organic Growth: Increase Domain Authority above 35.0 to secure Top-10 organic ranks."
-            ]
+                f"Accessibility: Fix {wcag_violations} WCAG violation(s) identified on the page.",
+                "GDPR: Block pre-consent tracking cookies." if not gdpr_data.get("is_compliant") else "GDPR: Compliance verified."
+            ],
+            "a11y_report": a11y_results
         }
+
     except Exception as e:
+        print("\n================ ERROR TRACEBACK ================")
+        traceback.print_exc()
+        print("=================================================\n")
         raise HTTPException(status_code=500, detail=f"Audit execution failed: {str(e)}")
